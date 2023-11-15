@@ -1,0 +1,51 @@
+name: Generate Go Code from loki-plugin-pb
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+jobs:
+  regen:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        id: go
+        with:
+          go-version-file: go.mod
+          # We use a manually configured cache key to avoid conflicts with the test action cache
+          # See https://github.com/actions/setup-go/issues/358
+          cache: false
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{runner.os}}-go-${{steps.go.outputs.go-version}}-regen-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{runner.os}}-go-${{steps.go.outputs.go-version}}-regen
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v2
+        with:
+          version: "23.x"
+      - name: Install protoc-gen-go
+        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+      - name: Install protoc-gen-go-grpc
+        run: go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+      - name: regenerate services file
+        run: |
+          make clone
+          make gen-proto
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v4
+        with:
+          # required so the PR triggers workflow runs
+          token: ${{ secrets.GH_LOKI_BOT }}
+          branch: fix/gen_proto
+          base: main
+          title: "fix: Generate Go Code from `loki-plugin-pb`"
+          commit-message: "fix: Generate Go Code from `loki-plugin-pb`"
+          body: This PR was created by a scheduled workflow to regenerate the Go code from `plugin-pb`.
+          author: loki-bot <loki-bot@users.noreply.github.com>
+          labels: automerge

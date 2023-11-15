@@ -1,0 +1,35 @@
+name: Lint
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  golangci:
+    name: Lint with GolangCI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        id: go
+        with:
+          go-version-file: go.mod
+          # We use a manually configured cache key to avoid conflicts with the test action cache
+          # See https://github.com/actions/setup-go/issues/358
+          cache: false
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{runner.os}}-go-${{steps.go.outputs.go-version}}-lint-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{runner.os}}-go-${{steps.go.outputs.go-version}}-lint
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.54.2
+          args: --verbose
